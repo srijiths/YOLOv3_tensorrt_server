@@ -1,8 +1,4 @@
 import os
-if os.environ.get('https_proxy'):
- del os.environ['https_proxy']
-if os.environ.get('http_proxy'):
- del os.environ['http_proxy']
 import argparse
 from functools import partial
 import cv2
