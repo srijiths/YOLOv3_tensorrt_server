@@ -1,0 +1,76 @@
+FROM nvidia/cuda:10.0-devel-ubuntu16.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=0
+
+# TensorRT client specific system installation
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends software-properties-common \
+    && add-apt-repository ppa:ubuntu-toolchain-r/test \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gcc libcurl3-dev \
+    && apt-get upgrade -y libstdc++6
+
+RUN apt-get install -y --no-install-recommends \
+    software-properties-common \
+    autoconf \
+    automake \
+    build-essential \
+    libopencv-dev \
+    libopencv-core-dev \
+    libtool \
+    pkg-config 
+
+# General tools installation
+RUN apt-get -y install build-essential \
+    curl \
+    wget \
+    bzip2 \
+    unzip \
+    git \
+    vim \
+    libopenblas-base
+
+# Install Miniconda
+RUN curl -sSL https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /tmp/miniconda.sh \
+    && bash /tmp/miniconda.sh -bfp /usr/local \
+    && rm -rf /tmp/miniconda.sh \
+    && conda install -y python=3 \
+    && conda update conda \
+    && apt-get -qq -y autoremove \
+    && apt-get autoclean \
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log \
+    && conda clean --all --yes
+	
+ENV PATH "/opt/conda/bin:${PATH}"
+
+# Install pytorch,opencv and faiss-cpu
+RUN conda install -y -c pytorch faiss-cpu opencv
+
+# Install it for TensorRT Client
+RUN pip install --upgrade setuptools grpcio-tools
+
+# TensorRT client installation
+RUN git clone -b r19.05 https://github.com/NVIDIA/tensorrt-inference-server.git \
+    && cd tensorrt-inference-server \
+    && make -j8 -f Makefile.client all \
+    && pip install --upgrade build/dist/dist/tensorrtserver-*.whl numpy pillow
+
+RUN cd /opt \
+    && mkdir code
+
+WORKDIR /opt/code
+
+# Install tensorrt standalone version for Mxnet
+RUN wget -qO tensorrt.deb https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1604/x86_64/nvinfer-runtime-trt-repo-ubuntu1604-5.0.2-ga-cuda10.0_1-1_amd64.deb \
+    && dpkg -i tensorrt.deb \
+    && apt-get update \
+    && apt-get install -y --allow-downgrades libnvinfer-dev \
+    && rm tensorrt.deb
+
+# Install required packages	
+RUN pip install imutils scipy scikit-learn==0.20.3 scikit-image  \
+    && pip install tensorflow==2.0.0a0
+
+# clean up
+RUN apt-get -qq -y remove curl bzip2
